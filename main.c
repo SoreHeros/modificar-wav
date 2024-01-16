@@ -41,7 +41,7 @@ unsigned short int read_short(FILE * file){
     return num;
 }
 
-int short_to_int(short int in){
+int short_to_int_escalado(short int in){
     int num = 0;
 
     if(in < 0)
@@ -136,7 +136,7 @@ wav * cargar_wav(char * filename){
     printf("\nSubchunk2size:\t");
     printf("%u", audio->Subchunk2Size = read_int(archivo));
 
-    printf("\nData:\n");
+    printf("\nData:      \t");
     audio->chanelData = malloc(audio->NumChanels * sizeof(int *));
 
     //reservar memoria para los canales
@@ -145,22 +145,54 @@ wav * cargar_wav(char * filename){
     }
 
     //todo leer stereo
-    for(int progress = 0; progress < 1000; progress++) {
-        for (int i = audio->Subchunk2Size / (audio->BitsPerSample / 8) * progress / 1000; i < audio->Subchunk2Size / (audio->BitsPerSample / 8) * (progress + 1) / 1000; i++) {
-            if (audio->BitsPerSample == 32) {
-                audio->chanelData[i % audio->NumChanels][i / audio->NumChanels] = (int) read_int(archivo);
-            } else {
-                audio->chanelData[i % audio->NumChanels][i / audio->NumChanels] = short_to_int(
-                        (short int) read_short(archivo));
-            }
+    for (int i = 0; i < audio->Subchunk2Size / (audio->BitsPerSample / 8); i++) {
+        if (audio->BitsPerSample == 32) {
+            audio->chanelData[i % audio->NumChanels][i / audio->NumChanels] = (int) read_int(archivo);
+        } else {
+            audio->chanelData[i % audio->NumChanels][i / audio->NumChanels] = short_to_int_escalado((short int) read_short(archivo));
         }
-        loading_bar((progress + 1) / (float) 1000, 100);
     }
-    printf("\n");
+
+    printf("cargada\n");
 
     fclose(archivo);
 
     return audio;
+}
+
+void guardar_wav(wav * audio){
+    char * nombre = malloc(1000);
+    FILE * archivo;
+
+    printf("\nIntroduce el nombre del archivo guardado\n");
+    scanf("%s", nombre);
+
+    archivo = fopen(nombre, "w");
+
+    fwrite(audio->ChunkId, 1, 4, archivo);
+    fwrite(&audio->ChunkSize, 4, 1, archivo);
+    fwrite(audio->Format, 1, 4, archivo);
+    fwrite(audio->Subchunk1ID, 1, 4, archivo);
+    fwrite(&audio->Subchunk1Size, 4, 1, archivo);
+    fwrite(&audio->AudioFormat, 2, 1, archivo);
+    fwrite(&audio->NumChanels, 2, 1, archivo);
+    fwrite(&audio->SampleRate, 4, 1, archivo);
+    fwrite(&audio->ByteRate, 4, 1, archivo);
+    fwrite(&audio->BlockAlign, 2, 1, archivo);
+    fwrite(&audio->BitsPerSample, 2, 1, archivo);
+    fwrite(audio->Subchunk2ID, 1, 4, archivo);
+    fwrite(&audio->Subchunk2Size, 4, 1, archivo);
+
+    char * datos = malloc(audio->Subchunk2Size);
+
+    //rellenar datos
+    for(int i = 0; i < audio->Subchunk2Size / (audio->BitsPerSample / 8); i++)
+        fwrite(&audio->chanelData[i % audio->NumChanels][i / audio->NumChanels], 1, (audio->BitsPerSample / 8), archivo); //por algún motivo hay que darle la vuelta a la orientación de los bits
+
+
+    fclose(archivo);
+    free(datos);
+    free(nombre);
 }
 
 void cerrar_wav(wav * audio){
@@ -196,6 +228,7 @@ int main(){
 
             printf("\nIntroduce lo que quieres hacer:\n");
             printf("cerrar: cerrar el archivo para abrir otro\n");
+            printf("guardar: guarda un archivo\n");
             printf("exit: salir\n");
 
             scanf("%s", menu);
@@ -203,15 +236,11 @@ int main(){
             if (!strcmp(menu, "cerrar")) {
                 cerrar_wav(audio);
                 audio = NULL;
-            }
+            }else if(!strcmp(menu, "guardar"))
+                guardar_wav(audio);
         }
 
     } while(strcmp(menu, "exit"));
 
     cerrar_wav(audio);
-
-    printf("\n\n\n\n\nterminado\n");
-
-    getchar();
-    getchar();
 }
