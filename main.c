@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct{
     char * ChunkId;
@@ -15,9 +16,8 @@ typedef struct{
     unsigned short int BitsPerSample;
     char * Subchunk2ID;
     unsigned int Subchunk2Size;
-    unsigned int * Data;
-}* wav;
-
+    int * * chanelData;
+}wav;
 
 unsigned int read_int(FILE * file){
     unsigned int num = 0;
@@ -41,6 +41,17 @@ unsigned short int read_short(FILE * file){
     return num;
 }
 
+int short_to_int(short int in){
+    int num = 0;
+
+    if(in < 0)
+        num = -0x8000;
+
+    num += in & 0x7fff;
+
+    return num;
+}
+
 char * read_string(FILE * file, int size){
     char c;
     char * string = malloc(size + 1);
@@ -52,12 +63,29 @@ char * read_string(FILE * file, int size){
     return string;
 }
 
-int main(){
+void loading_bar(float value, int size){
+    int i;
+    printf("\r%5.1f%%[",  value * 100);
+    for(i = 0; i < value * size; i++)
+        printf("%c", 219);
+
+    for(; i < size; i++)
+        printf(" ");
+    printf("]");
+}
+
+wav * cargar_wav(char * filename){
 
     FILE * archivo;
-    archivo = fopen("test.wav", "r");
+    archivo = fopen(filename, "rb");
 
-    wav audio = malloc(sizeof(wav));
+    if(archivo == NULL){
+        printf("ERROR: Archivo no encontrado");
+        return NULL;
+    }
+
+
+    wav * audio = malloc(sizeof(wav));
 
 
     char * string;
@@ -109,24 +137,81 @@ int main(){
     printf("%u", audio->Subchunk2Size = read_int(archivo));
 
     printf("\nData:\n");
-    audio->Data = malloc(audio->Subchunk2Size);
+    audio->chanelData = malloc(audio->NumChanels * sizeof(int *));
 
-    //todo leer stereo
-
-    if(audio->BitsPerSample == 16){
-        for(int i = 0; i < audio->Subchunk2Size / 4; i++){
-            printf("%u", audio->Data[i] = read_int(archivo));
-        }
-    }else{
-        for(int i = 0; i < audio->Subchunk2Size / 4; i++){
-            printf("%u", audio->Data[i] = read_short(archivo));
-        }
+    //reservar memoria para los canales
+    for(int i = 0; i < audio->NumChanels; i++){
+        audio->chanelData[i] = malloc(audio->Subchunk2Size / audio->NumChanels / (audio->BitsPerSample / 8) * sizeof(int));
     }
 
-    //todo liberar memoria del wav
-    free(audio->Data);
-    fclose(archivo);
-    printf("\n\n\n\n\n");
-    getchar();
+    //todo leer stereo
+    for(int progress = 0; progress < 1000; progress++) {
+        for (int i = audio->Subchunk2Size / (audio->BitsPerSample / 8) * progress / 1000; i < audio->Subchunk2Size / (audio->BitsPerSample / 8) * (progress + 1) / 1000; i++) {
+            if (audio->BitsPerSample == 32) {
+                audio->chanelData[i % audio->NumChanels][i / audio->NumChanels] = (int) read_int(archivo);
+            } else {
+                audio->chanelData[i % audio->NumChanels][i / audio->NumChanels] = short_to_int(
+                        (short int) read_short(archivo));
+            }
+        }
+        loading_bar((progress + 1) / (float) 1000, 100);
+    }
+    printf("\n");
 
+    fclose(archivo);
+
+    return audio;
+}
+
+void cerrar_wav(wav * audio){
+    printf("\ncerrando wav...\n");
+    if(audio == NULL) {
+        printf("El wav no existe\n");
+        return;
+    }
+
+
+    for(int i = 0; i < audio->NumChanels; i++)
+        free(audio->chanelData[i]);
+    free(audio->chanelData);
+    free(audio->Subchunk2ID);
+    free(audio->Subchunk1ID);
+    free(audio->Format);
+    free(audio);
+
+    printf("wav cerrado con exito!\n");
+}
+
+int main(){
+
+    wav * audio = NULL;
+    char * menu = malloc(100);
+
+    do {
+        if(audio == NULL) {
+            printf("\nIntroduzca el nombre del archivo a cargar\n");
+            scanf("%s", menu);
+            audio = cargar_wav(menu);
+        }else {
+
+            printf("\nIntroduce lo que quieres hacer:\n");
+            printf("cerrar: cerrar el archivo para abrir otro\n");
+            printf("exit: salir\n");
+
+            scanf("%s", menu);
+
+            if (!strcmp(menu, "cerrar")) {
+                cerrar_wav(audio);
+                audio = NULL;
+            }
+        }
+
+    } while(strcmp(menu, "exit"));
+
+    cerrar_wav(audio);
+
+    printf("\n\n\n\n\nterminado\n");
+
+    getchar();
+    getchar();
 }
