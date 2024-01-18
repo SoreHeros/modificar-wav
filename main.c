@@ -140,9 +140,6 @@ void cerrar_wav(wav * audio){
     }
 
     free(audio->data);
-    free(audio->subchunk2ID);
-    free(audio->subchunk1ID);
-    free(audio->format);
     free(audio);
 
     printf("wav cerrado con exito!\n");
@@ -201,7 +198,7 @@ int main(){
 
     do {
         if (audio == NULL) {
-            printf("\nIntroduzca el nombre del archivo a cargar\n");
+            printf("\nIntroduzca el nombre del archivo a cargar (o exit para salir)\n");
             scanf("%s", menu);
             audio = cargar_wav(menu);
         } else {
